@@ -1,0 +1,8 @@
+human factors in computing systems	CHI
+electronic commerce	EC
+international conference on information systems	ICIS
+ieee symposium on information visualization	INFOVIS
+ubiquitous computing	ISWC
+acm/ieee joint conference on digital libraries	JCDL
+international acm sigir conference on research and development in information retrieval	SIGIR
+international world wide web conferences	WWW

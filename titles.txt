@@ -1,0 +1,34 @@
+Trajectory Bundling for Animated Transitions	CHI	Conference
+Quantifying visual preferences around the world	CHI	Conference
+Strategic trading in informationally complex environments	EC	Conference
+Econometrics for Learning Agents	EC	Conference
+Deferred Acceptance with Compensation Chains	EC	Conference
+The Impacts of Social Media on Bitcoin Performance	ICIS	Conference
+Detecting Online Harassment in Social Networks	ICIS	Conference
+Interactive Visualization of Genealogical Graphs	INFOVIS	Conference
+An Evaluation of Microarray Visualization Tools for Biological Insight	INFOVIS	Conference
+Showing mutual support through digital empathy badges	ISWC	Conference
+Group activity recognition using belief propagation for wearable devices	ISWC	Conference
+Sensing group proximity dynamics of firefighting teams using smartphones	ISWC	Conference
+Online Person Name Disambiguation with Constraints	JCDL	Conference
+An argument for archiving Facebook as a heterogeneous personal store	JCDL	Conference
+Dynamic Query Modeling for Related Content Finding	SIGIR	Conference
+High Quality Graph-Based Similarity Search	SIGIR	Conference
+Optimizing Display Advertising in Online Social Networks	WWW	Conference
+Personalized collaborative clustering	WWW	Conference
+Associating consumer perceived value with business models for digital services	European Journal of Information Systems	Journal
+Performing embodied identity in virtual worlds	European Journal of Information Systems	Journal
+Design ethnography in information systems	Information Systems Journal	Journal
+Autonomy and procedural justice in strategic systems planning	Information Systems Journal	Journal
+Information Infrastructure Development and Governance as Collective Action	Information Systems Research	Journal
+Evaluation of Competing Candidate Solutions in Electronic Networks of Practice	Information Systems Research	Journal
+Interrupting the Workplace: Examining Stressors in an Information Technology Context	Journal of the Association for Information Systems	Journal
+Confirmation Biases in the Financial Analysis of IT Investments	Journal of the Association for Information Systems	Journal
+Exploring big data's strategic consequences	Journal of Information Technology	Journal
+Institutionalizing operational risk management: an empirical study	Journal of Information Technology	Journal
+The Impact of Firm Learning on Value Creation in Strategic Outsourcing Relationships	Journal of Management Information Systems	Journal
+Exploring How IT Professionals Experience Role Transitions at the End of Successful Projects	Journal of Management Information Systems	Journal
+Strategies and symbolism in the adoption of organizational social networking systems	The Journal of Strategic Information Systems	Journal
+Information Systems Strategy and Strategy-as-Practice: A joint agenda	The Journal of Strategic Information Systems	Journal
+Motivating Employees to Explore Collaboration Technology in Team Contexts	MIS Quarterly	Journal
+Explaining Data-Driven Document Classifications	MIS Quarterly	Journal

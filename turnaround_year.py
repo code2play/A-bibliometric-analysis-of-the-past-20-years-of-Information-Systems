@@ -84,7 +84,7 @@ def plot_innovation_score(score, year):
 
 def get_features(data, title=True, keywords=True, fos=False):
     def pad_space(x):
-        if x==None:
+        if pd.isna(x):
             return ' '
         return ' ' + x + ' '
     def concat(x):
@@ -113,7 +113,7 @@ if __name__=='__main__':
 
     num_topics = 30
     start_year, end_year = 1996, 2016
-    top_cited_num = 200
+    top_cited_num = 500
 
     papers, venues = read_data()
     papers = get_features(papers)
@@ -122,18 +122,21 @@ if __name__=='__main__':
             (papers['real_venue']=='www') & \
             (papers['year'].isin(range(start_year, end_year)))
     venue_paper = papers[cond]
-    venue_paper = venue_paper.sort_values('citations')
 
-    train = top_cited_every_year(venue_paper, top_cited_num)
+    # 用高引论文训练SVM效果不好
+    # venue_paper = venue_paper.sort_values('citations')
+    # train = top_cited_every_year(venue_paper, top_cited_num)
 
     text = np.array(venue_paper['text'])
     model = lda_model(text, num_topics)
     X = pd.DataFrame(get_topic_distribution(model, text))
     y = np.array(venue_paper['year'])
 
-    text = np.array(train['text'])
-    X_train = pd.DataFrame(get_topic_distribution(model, text))
-    y_train = np.array(train['year'])
+    # text = np.array(train['text'])
+    # X_train = pd.DataFrame(get_topic_distribution(model, text))
+    # y_train = np.array(train['year'])
+
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
     scaler = StandardScaler()
     X_train = scaler.fit_transform(X_train)

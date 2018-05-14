@@ -48,7 +48,8 @@ def doc2bow(data):
     # Stemming
     # nltk.download('wordnet')
     wnl = WordNetLemmatizer()
-    tokens = [[wnl.lemmatize(j) for j in i]for i in tokens]
+    tokens = [[wnl.lemmatize(j, pos='n') for j in i]for i in tokens]
+    tokens = [[wnl.lemmatize(j, pos='v') for j in i]for i in tokens]
 
     # Doc2bow
     dictionary = corpora.Dictionary(tokens)

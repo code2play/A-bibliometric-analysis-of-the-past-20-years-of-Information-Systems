@@ -124,10 +124,12 @@ def get_citation_info(data, type_str):
 
     # 引文时间差
     def interval(x):
+        if x==None:
+            return None
         b = cited_papers.loc[x].min().values[0]
         e = cited_papers.loc[x].max().values[0]
         return e-b
-    data['ref_interval'] = data[data['references'].notna()]['references'].apply(interval)
+    data['ref_interval'] = data['references'].apply(interval)
 
     data = data.merge(citations, left_on='id', right_index=True, how='left')
     data.to_json(filename)
@@ -273,13 +275,18 @@ def annual_summary(data, type_str, ALL=True):
 
 if __name__ == '__main__':
     jrnl_paper, conf_paper = select_data()
+
     jrnl_paper = get_citation_info(jrnl_paper, 'journal')
     basic_info(jrnl_paper, 'journal')
     annual_summary(jrnl_paper, 'journal', True)
     annual_summary(jrnl_paper, 'journal', False)
+
     conf_paper = get_citation_info(conf_paper, 'conference')
     basic_info(conf_paper, 'conference')
     annual_summary(conf_paper, 'conference', True)
     annual_summary(conf_paper, 'conference', False)
+
+    all_paper = pd.concat([jrnl_paper, conf_paper], ignore_index=True)
+    annual_summary(all_paper, 'all', True)
 
     print(now(), 'All Done!')

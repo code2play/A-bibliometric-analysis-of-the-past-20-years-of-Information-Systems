@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import time
 
 import numpy as np
@@ -28,7 +29,14 @@ def top_papers(data, type_str):
 def keep_it_real(x):
     if pd.isna(x):
         return np.nan
-    x = [word for word in x.split('#TAB#') if word!='']
+    if 'Stanford University' in x:
+        return 'Stanford University'
+    if 'Massachusetts Institute of Technology' in x or \
+        x.startswith('MIT'):
+        return 'Massachusetts Institute of Technology'
+    if x.startswith('IBM'):
+        return 'IBM'
+    x = [word.strip() for word in x.split('#TAB#') if word!='']
     x = ' '.join(x)
     x = x.split('|||')[0]
     # x = x.split('|')[-1]
@@ -69,6 +77,7 @@ def top_authors_and_orgs(data):
     authors['author_num'] = 1
     orgs = authors.groupby('org', as_index=False).sum()
     orgs['citations_per_paper'] = orgs['citations']/orgs['papers']
+    orgs = orgs[orgs['papers']>1]
     orgs = orgs.sort_values('citations_per_paper', ascending=False)
     orgs.index = range(1, len(orgs)+1)
     top_orgs = orgs.head(k)

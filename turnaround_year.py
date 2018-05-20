@@ -1,7 +1,6 @@
 import os
 import time
 
-import lda
 import nltk
 import numpy as np
 import pandas as pd
@@ -15,7 +14,6 @@ from sklearn.model_selection import (GridSearchCV, KFold,
                                      train_test_split)
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC, LinearSVC
-from stop_words import get_stop_words
 
 
 def now():
@@ -88,7 +86,11 @@ def turnaround_year(topic_dis, year, type_str):
 
     X = topic_dis
     y = year
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    if type_str=='journal':
+        test_size=0.2
+    else:
+        test_size=0.1
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
 
     scaler = StandardScaler()
     X_train = scaler.fit_transform(X_train)
@@ -97,22 +99,38 @@ def turnaround_year(topic_dis, year, type_str):
     svc = LinearSVC(random_state=42)
     svc.fit(X_train, y_train)
 
-    # score = cross_val_score(svc, X, y, scoring='neg_mean_absolute_error', 
-                            # cv=KFold(10))
-    # score = np.average(-score)
-    # print('CV MAE:', score)
+    # param = {'C':np.arange(0.1, 2, 0.2), 'max_iter':np.arange(1000, 10000, 2000)}
+    # clf = GridSearchCV(LinearSVC(), param, scoring='accuracy')
+    # clf.fit(X_train, y_train)
+    # print(now(), 'Best ACC:', clf.best_score_)
+
+    cv_mae = cross_val_score(svc, X_train, y_train, scoring='neg_mean_absolute_error', cv=10)
+    cv_mae = np.average(-score)
+    print(now(), 'CV MAE:', cv_mae)
+
+    y_pred = svc.predict(X_test)
+    test_mae = mean_absolute_error(y_test, y_pred)
+    test_acc = accuracy_score(y_test, y_pred)
+    print(now(), 'Test MAE:', test_mae)
+    print(now(), 'Test ACC:', test_acc)
 
     y_pred = svc.predict(X)
-    print('Test MAE:', mean_absolute_error(y, y_pred))
-    print('Test ACC:', accuracy_score(y, y_pred))
-
-    # param = {'C':np.arange(0.1, 3, 0.2), 'max_iter':np.arange(1000, 10000, 1000)}
-    # clf = GridSearchCV(LinearSVC(), param, scoring='accuracy')
-    # clf.fit(X, y)
-    # print(clf.best_score_)
     # y_pred = clf.predict(X)
-
+    all_mae = mean_absolute_error(y, y_pred)
+    all_acc = accuracy_score(y, y_pred)
+    print(now(), 'All MAE:', all_mae)
+    print(now(), 'All ACC:', all_acc)
     # plot_confusion_matrix(y, y_pred)
+
+    with open('./results/topics/{}/score.txt'.format(type_str), 'w') as f:
+        # f.write('Best param: ')
+        # f.write(clf.best_params_)
+        # f.write('Best ACC: {}'.format(clf.best_score_))
+        f.write('CV MAE: {}'.format(cv_mae))
+        f.write('Test MAE: {}'.format(test_mae))
+        f.write('Test ACC: {}'.format(test_acc))
+        f.write('All MAE: {}'.format(all_mae))
+        f.write('All ACC: {}'.format(all_acc))
 
     inv_score, year = innovation_score(y, y_pred)
     score = pd.Series(inv_score, index=year)

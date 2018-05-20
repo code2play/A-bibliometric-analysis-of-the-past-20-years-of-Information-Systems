@@ -5,9 +5,15 @@ import time
 
 import numpy as np
 import pandas as pd
+from fuzzywuzzy import fuzz
 
 start_year, end_year = 1996, 2016
 k = 30
+aff = pd.read_csv('./cache/Affiliations.txt', 
+                  sep='\t', 
+                  index_col=0, 
+                  names=['name'])
+aff = list(aff['name'])
 
 
 def now():
@@ -29,18 +35,41 @@ def top_papers(data, type_str):
 def keep_it_real(x):
     if pd.isna(x):
         return np.nan
-    if 'Stanford University' in x:
-        return 'Stanford University'
-    if 'Massachusetts Institute of Technology' in x or \
-        x.startswith('MIT'):
-        return 'Massachusetts Institute of Technology'
-    if x.startswith('IBM'):
-        return 'IBM'
-    x = [word.strip() for word in x.split('#TAB#') if word!='']
-    x = ' '.join(x)
+    x = x.lower()
+
+    # if 'stanford university' in x:
+    #     return 'Stanford University'
+    # if 'massachusetts institute of technology' in x or \
+    #     x.startswith('mit'):
+    #     return 'Massachusetts Institute of Technology'
+    # if x.startswith('ibm'):
+    #     return 'IBM'
+    # if x.startswith('microsoft'):
+    #     return 'Microsoft'
+    x = x.replace('univ.', 'university')
+    x = x.replace('unviersity', 'university')
+    x = x.replace('dept.', 'dept')
+    x = x.replace(' lab.', ' lab')
+    x = x.replace(' inc.', ' inc')
+    x = x.replace(' comp.', ' computer')
+    x = x.replace(' sci.', ' science')
+    x = x.replace('&', 'and')
+    x = ' '.join([word.strip() for word in x.split('#tab#') if word!=''])
     x = x.split('|||')[0]
-    # x = x.split('|')[-1]
-    return x.split(',')[0]
+    x = x.split(',')[0]
+    x = ' '.join([word.strip() for word in x.split('|') if word!=''])
+    x = ' '.join([word.strip() for word in x.split('/') if word!=''])
+
+    return x.title()
+
+
+def match(x):
+    x = x.lower()
+    r = [fuzz.partial_ratio(x, a)+fuzz.ratio(x, a) for a in aff]
+    index = np.argmax(r)
+    if r[index]>150:
+        x = aff[index]
+    return x.title()
 
 
 def top_authors_and_orgs(data):
@@ -69,6 +98,7 @@ def top_authors_and_orgs(data):
 
     authors = data.groupby(['name', 'org'], as_index=False).sum()
     authors['citations_per_paper'] = authors['citations']/authors['papers']
+    authors['org'] = authors[authors['citations_per_paper']>100]['org'].apply(match)
     authors = authors.sort_values('citations_per_paper', ascending=False)
     authors.index = range(1, len(authors)+1)
     top_authors = authors
@@ -77,7 +107,7 @@ def top_authors_and_orgs(data):
     authors['author_num'] = 1
     orgs = authors.groupby('org', as_index=False).sum()
     orgs['citations_per_paper'] = orgs['citations']/orgs['papers']
-    orgs = orgs[orgs['papers']>1]
+    # orgs = orgs[orgs['papers']>1]
     orgs = orgs.sort_values('citations_per_paper', ascending=False)
     orgs.index = range(1, len(orgs)+1)
     top_orgs = orgs.head(k)
@@ -94,7 +124,7 @@ if __name__ == '__main__':
     top_papers(jrnl_papers, 'journal')
     top_papers(conf_papers, 'conference')
 
-    papers = pd.concat([jrnl_papers, conf_papers])
+    papers = pd.concat([jrnl_papers, conf_papers], ignore_index=True)
     top_authors_and_orgs(papers)
 
     print(now(), 'All Done!')

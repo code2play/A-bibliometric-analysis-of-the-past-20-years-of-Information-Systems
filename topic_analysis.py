@@ -188,9 +188,9 @@ def topic_analysis(data, type_str, n_topics):
     print(now(), 'analysing {} topics'.format(type_str))
     if not os.path.exists('./results/topics/{}'.format(type_str)):
         os.mkdir('./results/topics/{}'.format(type_str))
-    Dir = './results/topics/{}/{} topics'.format(type_str, n_topics)
-    if not os.path.exists(Dir):
-        os.mkdir(Dir)
+    if not os.path.exists('./results/topics/{}/{} topics'.format(type_str, n_topics)):
+        os.mkdir('./results/topics/{}/{} topics'.format(type_str, n_topics))
+    Dir = './results/topics/{}/{} topics/'.format(type_str, n_topics)
 
     data = data[data['year'].isin(range(start_year, end_year))].copy()
     text = get_docs(data, title=True, keywords=True, fos=False)
@@ -245,7 +245,7 @@ def topic_analysis(data, type_str, n_topics):
     hot_topic_df['rk'] = rk
     hot_topic_df.to_csv(Dir+'hot topics.csv')
 
-    turnaround_year(topic_dis, year, type_str)
+    turnaround_year(topic_dis, year, type_str, Dir)
 
 
 if __name__=='__main__':

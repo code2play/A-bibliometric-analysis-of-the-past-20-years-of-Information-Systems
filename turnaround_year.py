@@ -81,7 +81,7 @@ def plot_innovation_score(score, year):
     plt.show()
 
 
-def turnaround_year(topic_dis, year, type_str):
+def turnaround_year(topic_dis, year, type_str, Dir):
     print(now(), 'finding {} turnaround year'.format(type_str))
 
     X = topic_dis
@@ -105,7 +105,7 @@ def turnaround_year(topic_dis, year, type_str):
     # print(now(), 'Best ACC:', clf.best_score_)
 
     cv_mae = cross_val_score(svc, X_train, y_train, scoring='neg_mean_absolute_error', cv=10)
-    cv_mae = np.average(-score)
+    cv_mae = np.average(-cv_mae)
     print(now(), 'CV MAE:', cv_mae)
 
     y_pred = svc.predict(X_test)
@@ -122,17 +122,17 @@ def turnaround_year(topic_dis, year, type_str):
     print(now(), 'All ACC:', all_acc)
     # plot_confusion_matrix(y, y_pred)
 
-    with open('./results/topics/{}/score.txt'.format(type_str), 'w') as f:
+    with open(Dir+'score.txt', 'w') as f:
         # f.write('Best param: ')
         # f.write(clf.best_params_)
         # f.write('Best ACC: {}'.format(clf.best_score_))
-        f.write('CV MAE: {}'.format(cv_mae))
-        f.write('Test MAE: {}'.format(test_mae))
-        f.write('Test ACC: {}'.format(test_acc))
-        f.write('All MAE: {}'.format(all_mae))
-        f.write('All ACC: {}'.format(all_acc))
+        f.write('CV MAE: {}\n'.format(cv_mae))
+        f.write('Test MAE: {}\n'.format(test_mae))
+        f.write('Test ACC: {}\n'.format(test_acc))
+        f.write('All MAE: {}\n'.format(all_mae))
+        f.write('All ACC: {}\n'.format(all_acc))
 
     inv_score, year = innovation_score(y, y_pred)
     score = pd.Series(inv_score, index=year)
-    score.to_csv('./results/topics/{}/innovation score.csv'.format(type_str))
+    score.to_csv(Dir+'innovation score.csv'.format(type_str))
     # plot_innovation_score(inv_score, year)

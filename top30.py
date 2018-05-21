@@ -97,8 +97,11 @@ def top_authors_and_orgs(data):
     data['org'] = data['org'].apply(keep_it_real)
 
     authors = data.groupby(['name', 'org'], as_index=False).sum()
+
+    cond = authors['papers']>5
+    authors[cond]['org'] = authors[cond]['org'].copy().apply(match)
+
     authors['citations_per_paper'] = authors['citations']/authors['papers']
-    authors['org'] = authors[authors['citations_per_paper']>100]['org'].apply(match)
     authors = authors.sort_values('citations_per_paper', ascending=False)
     authors.index = range(1, len(authors)+1)
     top_authors = authors

@@ -15,7 +15,7 @@ from turnaround_year import turnaround_year
 
 start_year, end_year = 1996, 2016
 n_topic_list = [50, 100, 300, 500, 1000]
-threshold = 0.5
+threshold = 0.2
 hot_topic_num_year = 5
 hot_topic_num_all = 50
 
@@ -220,16 +220,24 @@ def topic_analysis(data, type_str, n_topics):
 
     topics, prob = get_topics(model, n_topics)
     topics_df = pd.DataFrame(topics)
+    topics_df = topics_df.iloc[hot_topic, :]
     topics_df.to_csv(Dir+'topic terms.csv')
     prob_df = pd.DataFrame(prob)
+    prob_df = prob_df.iloc[hot_topic, :]
     prob_df.to_csv(Dir+'topic terms probability.csv')
-    hot_topic_df = pd.DataFrame(topics_df.apply(lambda x: ' '.join(x), axis=1)[hot_topic])
+
+    hot_topic_df = pd.DataFrame()
+    hot_topic_df['topics'] = topics_df.apply(lambda x: ' '.join(x), axis=1)
     hot_topic_df['occurrence'] = occurrence
+    rk, theta = topic_rk(has_topic[hot_topic], year)
+    hot_topic_df['rk'] = rk
+    hot_topic_df.to_csv(Dir+'hot topics.csv')
 
     co_presence, connection = co_occurrence_matrix(has_topic, len(text), n_topics)
     # connection = pd.DataFrame(connection)
     # connection.to_csv(Dir+'connection.csv')
     co_presence = pd.DataFrame(co_presence)
+    co_presence = co_presence.iloc[hot_topic, hot_topic]
     co_presence.to_csv(Dir+'co-presence.csv')
 
     topic_of_the_year, key_papers_num, key_papers_proportion = hot_topics_every_year(has_topic, year)
@@ -241,11 +249,7 @@ def topic_analysis(data, type_str, n_topics):
     }, index=range(start_year, end_year))
     key_papers.to_csv(Dir+'key papers.csv')
 
-    rk, theta = topic_rk(has_topic[hot_topic], year)
-    hot_topic_df['rk'] = rk
-    hot_topic_df.to_csv(Dir+'hot topics.csv')
-
-    turnaround_year(topic_dis, year, type_str, Dir)
+    # turnaround_year(topic_dis, year, type_str, Dir)
 
 
 if __name__=='__main__':

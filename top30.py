@@ -9,11 +9,11 @@ from fuzzywuzzy import fuzz
 
 start_year, end_year = 1996, 2016
 k = 30
-aff = pd.read_csv('./cache/Affiliations.txt', 
-                  sep='\t', 
-                  index_col=0, 
-                  names=['name'])
-aff = list(aff['name'])
+# aff = pd.read_csv('./cache/Affiliations.txt', 
+#                   sep='\t', 
+#                   index_col=0, 
+#                   names=['name'])
+# aff = list(aff['name'])
 
 
 def now():

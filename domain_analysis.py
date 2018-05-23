@@ -11,7 +11,7 @@ from top30 import keep_it_real
 # DATA_PATH = 'D:\\Dataset\\mag\\mag_papers_{}.txt'
 FILE_NUM = 1
 DATA_PATH = 'mag_papers_{}.txt'
-start_year, end_year = 1995, 2016
+start_year, end_year = 1996, 2016
 
 
 def now():
@@ -67,83 +67,73 @@ def select_data():
     return jrnl_paper, conf_paper
 
 # 统计引用信息
-def count_citation(paper_ids, authors, venues, ref_ids, type_str):
-    print('{} Start counting {} citation'.format(now(), type_str))
+def count_citation(data, type_str):
+    paper_citation = dict.fromkeys(data.index, 0)
+    paper_author_self_citation = dict.fromkeys(data.index, 0)
+    paper_venue_self_citation = dict.fromkeys(data.index, 0)
+    years = range(start_year, end_year)
+    year_citation = dict.fromkeys(years, 0)
+    year_author_self_citation = dict.fromkeys(years, 0)
+    year_venue_self_citation = dict.fromkeys(years, 0)
+    ref_interval = dict.fromkeys(years, 0)
 
-    citation_filename = './cache/{}_paper_citations.txt'.format(type_str)
-    papers_filename = './cache/{}_cited_papers.csv'.format(type_str)
-    if os.path.exists(citation_filename) and os.path.exists(papers_filename):
-        citations = pd.read_json(citation_filename, typ='frame')
-        cited_papers = pd.read_csv(papers_filename, index_col=0)
-        return citations, cited_papers
-
-    citation = dict.fromkeys(paper_ids, 0)
-    author_self_citation = dict.fromkeys(paper_ids, 0)
-    venue_self_citation = dict.fromkeys(paper_ids, 0)
-    # 被期刊或会议中论文引用的论文的发表时间，用于计算引文时间差
-    cited_papers = dict.fromkeys(ref_ids)
     for i in range(FILE_NUM):
         print(now(), i)
         with open(DATA_PATH.format(i), 'r', encoding='UTF-8') as f:
             for line in f:
-                data = json.loads(line)
-                if data['id'] in cited_papers:
-                    cited_papers[data['id']] = data['year']
-                if 'references' not in data:
+                paper = json.loads(line)
+                if 'year' not in paper:
                     continue
-                for ref in data['references']:
-                    if ref not in citation:
-                        continue
-                    citation[ref] += 1
-                    # 判断自引
-                    if 'authors' not in data:
-                        continue
-                    for author in data['authors']:
-                        if author in authors[ref]:
-                            author_self_citation[ref] += 1
-                            break
-                    if 'venue' not in data:
-                        continue
-                    if data['venue']==venues[ref]:
-                        venue_self_citation[ref] += 1
+                year = paper['year']
+                if year not in years:
+                    continue
+                if 'references' in paper:
+                    for ref in paper['references']:
+                        if ref in paper_citation:
+                            paper_citation[ref] += 1
+                            year_citation[year] += 1
+                            ref_interval[year] += year-data.loc[ref, 'year']
+                            # 判断自引
+                            if 'authors' in paper:
+                                for author in paper['authors']:
+                                    if author in data.loc[ref, 'authors']:
+                                        paper_author_self_citation[ref] += 1
+                                        year_author_self_citation[year] += 1
+                                        break
+                            if 'venue' in paper:
+                                if paper['venue']==data.loc[ref, 'venue']:
+                                    paper_venue_self_citation[ref] += 1
+                                    year_venue_self_citation[year] += 1
 
-    citations = pd.DataFrame({'citations':citation,
-                              'author_self_citations':author_self_citation,
-                              'venue_self_citations':venue_self_citation})
-    citations.to_json(citation_filename)
-    cited_papers = pd.DataFrame({'year': cited_papers})
-    cited_papers.to_csv(papers_filename)
-    return citations, cited_papers
+    paper_citation = pd.DataFrame({'citations':paper_citation,
+                                   'author_self_citations':paper_author_self_citation,
+                                   'venue_self_citations':paper_venue_self_citation})
+    year_citation = pd.DataFrame({'citations':year_citation,
+                                  'author_self_citations':year_author_self_citation,
+                                  'venue_self_citations':year_venue_self_citation,
+                                  'ref_interval_sum':ref_interval})
+    year_citation.to_csv('./cache/{}_citation_annual_summary.csv'.format(type_str))
+    return paper_citation, year_citation
 
-# 合并数据集
+
 def get_citation_info(data, type_str):
     print('{} Start getting {} citation data'.format(now(), type_str))
 
     filename = './cache/{}_paper_complete.txt'.format(type_str)
-    if os.path.exists(filename):
+    citation_filename = './cache/{}_citation_annual_summary.csv'.format(type_str)
+    if os.path.exists(filename) and os.path.exists(citation_filename):
         data = pd.read_json(filename, typ='frame')
-        return data
+        year_citation = pd.read_csv(citation_filename, index_col=0)
+        return data, year_citation
 
-    paper_ids = data['id'].values
-    authors = data['authors']
-    authors.index = data['id']
-    venues = data['venue']
-    venues.index = data['id']
-    # 所有引文id
-    ref_ids = [j for i in data[data['references'].notna()]['references'] for j in i]
-
-    citations, cited_papers = count_citation(paper_ids, authors, venues, ref_ids, type_str)
-
-    # 引文时间差
-    def interval(x):
-        b = cited_papers.loc[x].min().values[0]
-        e = cited_papers.loc[x].max().values[0]
-        return e-b
-    data['ref_interval'] = data[data['references'].notna()]['references'].apply(interval)
-
-    data = data.merge(citations, left_on='id', right_index=True, how='left')
+    cols = ['year', 'authors', 'venue']
+    temp = data[cols]
+    temp.index = data['id']
+    paper_citation, year_citation = count_citation(temp, type_str)
+    
+    data = data.merge(paper_citation, left_on='id', right_index=True, how='left')
     data.to_json(filename)
-    return data
+    return data, year_citation
 
 
 def num_of_uniq_authors(authors):
@@ -164,7 +154,7 @@ def basic_info(data, type_str):
     if not os.path.exists('./results'):
         os.mkdir('./results')
 
-    cond = data['year'].isin(range(start_year+1, end_year))
+    cond = data['year'].isin(range(start_year, end_year))
     data = data[cond].copy()
 
     authors = data['authors'][data['authors'].notna()]
@@ -196,28 +186,22 @@ def basic_info(data, type_str):
     year_df['num_years'] = year_df['years'].apply(len)
 
     data['papers_num'] = 1
-    data = data.drop(['issue', 'n_citation', 'page_end', 'page_start', 'volume'], axis=1)
     data = data.groupby(['real_venue'], as_index=False, sort=True).sum()
     data = data.merge(year_df, on='real_venue')
 
     data['paper_per_author'] = data['papers_num']/data['authors_num']
     data['author_per_paper'] = data['uniq_authors']/data['papers_num']
     data['citation_per_paper'] = data['citations']/data['papers_num']
-    data = data.drop(['ref_interval', 'author_self_citations', 'venue_self_citations', 'year'], axis=1)
+    data = data.drop(['year'], axis=1)
     data.to_csv('./results/{} basic info.csv'.format(type_str))
 
 
-def annual_summary(data, type_str, ALL=True):
-    if ALL==True:
-        print('{} Start calculating annual summary for all {} papers'.format(now(), type_str))
-    else:
-        print('{} Start calculating annual summary for each {} venues'.format(now(), type_str))
+def annual_summary(data, year_citation, type_str):
+    print('{} Start calculating annual summary for {} papers'.format(now(), type_str))
     if not os.path.exists('./results'):
         os.mkdir('./results')
     if not os.path.exists('./results/growth of domain & impact'):
         os.mkdir('./results/growth of domain & impact')
-    if not os.path.exists('./results/growth of domain & impact/{}'.format(type_str)):
-        os.mkdir('./results/growth of domain & impact/{}'.format(type_str))
 
     cond = data['year'].isin(range(start_year, end_year))
     data = data[cond].copy()
@@ -229,25 +213,13 @@ def annual_summary(data, type_str, ALL=True):
     data['reference_num'] = refs.apply(len)
 
     data['papers_num'] = 1
-    # data['key_papers'] = data['citations']>100
-    data = data.drop(['issue', 'n_citation', 'page_end', 'page_start', 'volume'], axis=1)
+    uniq_authors = [num_of_uniq_authors(data[data['year']==y]['authors']) \
+                    for y in range(start_year, end_year)]
+    data = data.drop(['citations', 'author_self_citations', 'venue_self_citations'], axis=1)
+    data = data.groupby(['year'], as_index=False, sort=True).sum()
+    data['uniq_authors'] = uniq_authors
 
-    if ALL==True:
-        uniq_authors = [num_of_uniq_authors(data[data['year']==y]['authors']) \
-                        for y in range(start_year, end_year)]
-        data = data.groupby(['year'], as_index=False, sort=True).sum()
-        data['uniq_authors'] = uniq_authors
-    else:
-        venues = sorted(data['real_venue'].unique())
-        uniq_authors = []
-        for y in range(start_year, end_year):
-            for v in venues:
-                cond = (data['year']==y) & (data['real_venue']==v)
-                num = num_of_uniq_authors(data[cond]['authors'])
-                if num!=0:
-                    uniq_authors.append(num)
-        data = data.groupby(['year', 'real_venue'], as_index=False, sort=True).sum()
-        data['uniq_authors'] = uniq_authors
+    data = data.merge(year_citation, on='year')
 
     data['paper_per_author'] = data['papers_num']/data['authors_num']
     data['author_per_paper'] = data['uniq_authors']/data['papers_num']
@@ -255,49 +227,42 @@ def annual_summary(data, type_str, ALL=True):
     data['reference_per_paper'] = data['reference_num']/data['papers_num']
     data['author_self_citation_rate'] = data['author_self_citations']/data['citations']
     data['venue_self_citation_rate'] = data['venue_self_citations']/data['citations']
-    data['mean_ref_interval'] = data['ref_interval']/data['papers_num']
-    # data['key_papers_rate'] = data['key_papers']/data['papers_num']
-    data = data.drop(['reference_num', 'ref_interval'], axis=1)
+    data['mean_ref_interval'] = data['ref_interval_sum']/data['citations']
+    data = data.drop(['ref_interval_sum'], axis=1)
 
-    def growth_rate(df):
-        g1 = df.iloc[1:, :]
-        g2 = df.iloc[:-1,:]
-        g1.index = g2.index = range(len(g1))
-        cols = ['citations', 'authors_num', 'papers_num', 'paper_per_author']
-        growth_rate = (g1.loc[:,cols]-g2.loc[:,cols])/g2.loc[:,cols]
-        cols = [item+'_growth_rate' for item in cols]
-        growth_rate.columns = cols
-        growth_rate['year'] = g1['year']
+    g1 = df.iloc[1:, :]
+    g2 = df.iloc[:-1,:]
+    g1.index = g2.index = range(len(g1))
+    cols = ['citations', 'authors_num', 'papers_num', 'paper_per_author']
+    growth_rate = (g1.loc[:,cols]-g2.loc[:,cols])/g2.loc[:,cols]
+    cols = [item+'_growth_rate' for item in cols]
+    growth_rate.columns = cols
+    growth_rate['year'] = g1['year']
 
-        res = g1.merge(growth_rate, on='year', how='left')
-        res.index = range(1, len(res)+1)
-        return res
+    res = data.merge(growth_rate, on='year', how='left')
+    res.index = range(1, len(res)+1)
 
-    if ALL==True:
-        res = growth_rate(data)
-        res.to_csv('./results/growth of domain & impact/{}/all {} annual summary.csv'.format(type_str, type_str))
-    else:
-        venues = data['real_venue'].unique()
-        for venue in venues:
-            cond = (data['real_venue']==venue)
-            res = growth_rate(data[cond])
-            res.to_csv('./results/growth of domain & impact/{}/{} annual summary.csv'.format(type_str, venue))
+    res.to_csv('./results/growth of domain & impact/{} annual summary.csv'.format(type_str, type_str))
 
 
 if __name__ == '__main__':
     jrnl_paper, conf_paper = select_data()
+    jrnl_paper, jrnl_year_citation = get_citation_info(jrnl_paper, 'journal')
+    conf_paper, conf_year_citation = get_citation_info(conf_paper, 'conference')
 
-    jrnl_paper = get_citation_info(jrnl_paper, 'journal')
+    cols = ['abstract', 'doc_type', 'doi', 'fos', 'issue', 'keywords', 'lang',
+            'n_citation', 'page_end', 'page_start', 'publisher', 'title', 'url', 'volume']
+    jrnl_paper = jrnl_paper.drop(cols, axis=1)
+    conf_paper = conf_paper.drop(cols, axis=1)
+
     basic_info(jrnl_paper, 'journal')
-    annual_summary(jrnl_paper, 'journal', True)
-    # annual_summary(jrnl_paper, 'journal', False)
+    annual_summary(jrnl_paper, jrnl_year_citation, 'journal')
 
-    conf_paper = get_citation_info(conf_paper, 'conference')
     basic_info(conf_paper, 'conference')
-    annual_summary(conf_paper, 'conference', True)
-    # annual_summary(conf_paper, 'conference', False)
+    annual_summary(conf_paper, conf_year_citation, 'conference')
 
     all_paper = pd.concat([jrnl_paper, conf_paper], ignore_index=True)
-    annual_summary(all_paper, 'all', True)
+    all_year_citation = jrnl_year_citation + conf_year_citation
+    annual_summary(all_paper, all_year_citation, 'all')
 
     print(now(), 'All Done!')

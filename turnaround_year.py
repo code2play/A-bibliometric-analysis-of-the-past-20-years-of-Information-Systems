@@ -20,12 +20,10 @@ def now():
     return time.strftime("%m-%d %H:%M", time.localtime())
 
 
-def plot_confusion_matrix(y_true, y_pred):
-    cm = confusion_matrix(y_true, y_pred)
-    labels = np.unique(y_true)
+def plot_confusion_matrix(cm, labels, Dir):
     n = len(labels)
-
     fig, ax = plt.subplots()
+    fig.set_size_inches(10, 8)
     im = ax.imshow(cm)
 
     plt.xlabel('y_pred')
@@ -34,18 +32,20 @@ def plot_confusion_matrix(y_true, y_pred):
     ax.set_yticks(np.arange(n))
     ax.set_xticklabels(labels)
     ax.set_yticklabels(labels)
-    ax.tick_params(top=True, bottom=False,
-                   labeltop=True, labelbottom=False)
-    plt.setp(ax.get_xticklabels(), rotation=-30, ha="right",
+    # ax.tick_params(top=True, bottom=False,
+    #                labeltop=True, labelbottom=False)
+    plt.setp(ax.get_xticklabels(), rotation=90, ha="right",
             rotation_mode="anchor")
-    for i in range(n):
-        for j in range(n):
-            if cm[i][j]==0:
-                continue
-            text = ax.text(j, i, cm[i, j],
-                        ha="center", va="center", color="w")
+    # for i in range(n):
+    #     for j in range(n):
+    #         if cm[i][j]==0:
+    #             continue
+    #         text = ax.text(j, i, cm[i, j],
+    #                     ha="center", va="center", color="w")
     cbar = ax.figure.colorbar(im, ax=ax)
-    plt.show()
+    plt.tight_layout()
+    plt.savefig(Dir+'confusion matrix.pdf', format='pdf')
+    # plt.show()
 
 
 def innovation_score(y_true, y_pred):
@@ -86,10 +86,7 @@ def turnaround_year(topic_dis, year, type_str, Dir):
 
     X = topic_dis
     y = year
-    if type_str=='journal':
-        test_size=0.2
-    else:
-        test_size=0.1
+    test_size=0.1
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
 
     scaler = StandardScaler()
@@ -104,7 +101,10 @@ def turnaround_year(topic_dis, year, type_str, Dir):
     # clf.fit(X_train, y_train)
     # print(now(), 'Best ACC:', clf.best_score_)
 
-    cv_mae = cross_val_score(svc, X_train, y_train, scoring='neg_mean_absolute_error', cv=10)
+    cv_mae = cross_val_score(svc, X, y, 
+                             scoring='neg_mean_absolute_error', 
+                             n_jobs=-1,
+                             cv=5)
     cv_mae = np.average(-cv_mae)
     print(now(), 'CV MAE:', cv_mae)
 
@@ -120,12 +120,18 @@ def turnaround_year(topic_dis, year, type_str, Dir):
     all_acc = accuracy_score(y, y_pred)
     print(now(), 'All MAE:', all_mae)
     print(now(), 'All ACC:', all_acc)
-    # plot_confusion_matrix(y, y_pred)
+    
+    labels = np.unique(y)
+    cm = confusion_matrix(y, y_pred, labels=labels)
+    cm_df = pd.DataFrame(cm, index=labels, columns=labels)
+    cm_df.to_csv(Dir+'confusion matrix.csv')
+    plot_confusion_matrix(cm, labels, Dir)
 
     with open(Dir+'score.txt', 'w') as f:
         # f.write('Best param: ')
         # f.write(clf.best_params_)
         # f.write('Best ACC: {}'.format(clf.best_score_))
+        f.write('Number of Cases: {}\n'.format(len(X)))
         f.write('CV MAE: {}\n'.format(cv_mae))
         f.write('Test MAE: {}\n'.format(test_mae))
         f.write('Test ACC: {}\n'.format(test_acc))
@@ -136,3 +142,15 @@ def turnaround_year(topic_dis, year, type_str, Dir):
     score = pd.Series(inv_score, index=year)
     score.to_csv(Dir+'innovation score.csv'.format(type_str))
     # plot_innovation_score(inv_score, year)
+
+
+if __name__=='__main__':
+    type_strs = ['journal', 'conference']
+    n_topicss = [100, 500]
+
+    for type_str, n_topics in zip(type_strs, n_topicss):
+        Dir = './results/topics/{}/{} topics/'.format(type_str, n_topics)
+        cm_df = pd.read_csv(Dir+'confusion matrix.csv', index_col=0)
+        labels = list(cm_df.index)
+        cm = cm_df.values
+        plot_confusion_matrix(cm, labels, Dir)

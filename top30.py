@@ -37,15 +37,15 @@ def keep_it_real(x):
         return np.nan
     x = x.lower()
 
-    # if 'stanford university' in x:
-    #     return 'Stanford University'
-    # if 'massachusetts institute of technology' in x or \
-    #     x.startswith('mit'):
-    #     return 'Massachusetts Institute of Technology'
-    # if x.startswith('ibm'):
-    #     return 'IBM'
-    # if x.startswith('microsoft'):
-    #     return 'Microsoft'
+    if 'stanford university' in x:
+        return 'Stanford University'
+    if 'massachusetts institute of technology' in x or \
+        x.startswith('mit'):
+        return 'Massachusetts Institute of Technology'
+    if x.startswith('ibm'):
+        return 'IBM'
+    if x.startswith('microsoft'):
+        return 'Microsoft'
     x = x.replace('univ.', 'university')
     x = x.replace('unviersity', 'university')
     x = x.replace('dept.', 'dept')
@@ -98,8 +98,8 @@ def top_authors_and_orgs(data):
 
     authors = data.groupby(['name', 'org'], as_index=False).sum()
 
-    cond = authors['papers']>5
-    authors[cond]['org'] = authors[cond]['org'].copy().apply(match)
+    # cond = authors['papers']>5
+    # authors[cond]['org'] = authors[cond]['org'].copy().apply(match)
 
     authors['citations_per_paper'] = authors['citations']/authors['papers']
     authors = authors.sort_values('citations_per_paper', ascending=False)

@@ -2,10 +2,12 @@ import json
 import os
 import time
 
+import langid
 import nltk
 import numpy as np
 import pandas as pd
 from gensim import corpora
+from gensim.models import LdaMulticore
 from gensim.models.ldamodel import LdaModel
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
@@ -14,7 +16,7 @@ from nltk.tokenize import RegexpTokenizer
 from turnaround_year import turnaround_year
 
 start_year, end_year = 1996, 2016
-n_topic_list = [50, 100, 300, 500, 1000]
+n_topic_list = [100, 300, 500, 1000]
 threshold = 0.2
 hot_topic_num_year = 5
 hot_topic_num_all = 50
@@ -24,7 +26,7 @@ def now():
     return time.strftime("%m-%d %H:%M", time.localtime())
 
 
-def get_docs(data, title=True, keywords=True, fos=False):
+def get_docs(data, title=True, keywords=False, fos=False):
     def pad_space(x):
         if pd.isna(x):
             return ' '
@@ -33,7 +35,6 @@ def get_docs(data, title=True, keywords=True, fos=False):
         if x==None:
             return ' '
         return ' ' + ' '.join(x) + ' '
-    data = data.copy()
     data['title'] = data['title'].apply(pad_space)
     data['abstract'] = data['abstract'].apply(pad_space)
     data['keywords'] = data['keywords'].apply(concat)
@@ -47,17 +48,25 @@ def get_docs(data, title=True, keywords=True, fos=False):
     if fos:
         data['text'] += data['fos']
     data['text'] = data['text'].apply(str.lower)
-    return np.array(data['text'])
+
+    def is_en(x):
+        if pd.isna(x):
+            return False
+        return langid.classify(x)[0]=='en'
+    cond = data['year'].isin(range(start_year, end_year)) & \
+           data['text'].apply(is_en)
+    return data[cond][['text', 'year']]
 
 
 def doc2bow(data):
     # Tokenize
-    tokenizer = RegexpTokenizer('\w[\w\'\-]+')
+    tokenizer = RegexpTokenizer('[a-z][a-z]+')
     tokens = [tokenizer.tokenize(text) for text in data]
 
     # Exclud stop words
     # nltk.download('stopwords')
-    en_stop = stopwords.words('english')
+    # en_stop = stopwords.words('english')
+    en_stop = json.load(open('./cache/en.json', 'r'))
     tokens = [[j for j in i if j not in en_stop] for i in tokens]
 
     # Stemming
@@ -73,14 +82,19 @@ def doc2bow(data):
     return dictionary, corpus
 
 
-def lda_model(data, num_topics, iterations=100, passes=50):
-    print(now(), 'training lda model')
-    dictionary, corpus = doc2bow(data)
-    model = LdaModel(corpus, id2word=dictionary, 
-                    num_topics=num_topics, 
-                    iterations=iterations, 
-                    passes=passes,
-                    random_state=42)
+def lda_model(corpus, dictionary, num_topics, model_file_name):
+    if os.path.exists(model_file_name):
+        print(now(), 'loading lda model n_topics={}'.format(num_topics))
+        model = LdaModel.load(model_file_name)
+    else:
+        print(now(), 'training lda model n_topics={}'.format(num_topics))
+        model = LdaMulticore(corpus, 
+                            id2word=dictionary, 
+                            num_topics=num_topics, 
+                            iterations=100, 
+                            passes=50,
+                            random_state=42)
+        model.save(model_file_name)
     return model
 
 
@@ -94,15 +108,10 @@ def get_topics(model, num_topics, num_words=10):
     return topic_list, topic_prob
 
 
-def get_topic_distribution(model, data):
-    dictionary, corpus = doc2bow(data)
+def get_topic_distribution(model, corpus):
     topics = model.get_document_topics(corpus, minimum_probability=0)
     topic_distribution = [{j[0]:j[1] for j in i} for i in topics]
     return pd.DataFrame(topic_distribution)
-
-
-def get_term_distribution(model, data):
-    pass
 
 
 def co_occurrence_matrix(has_topic, n_docs, n_topics):
@@ -116,10 +125,10 @@ def co_occurrence_matrix(has_topic, n_docs, n_topics):
     cond_prob = np.zeros((n_topics, n_topics))
     # 共现
     co_presence = np.zeros((n_topics, n_topics))
-    for i in range(n_topics):
-        for j in range(n_topics):
-            pi, pj = topic_prob[i], topic_prob[j]
-            pij = ((has_topic[i]*has_topic[j]).sum())/n_docs
+    for i, ti in enumerate(has_topic.columns):
+        for j, tj in enumerate(has_topic.columns):
+            pi, pj = topic_prob[ti], topic_prob[tj]
+            pij = ((has_topic[ti]*has_topic[tj]).sum())/n_docs
             if pi>0 and pj>0:
                 cond_prob[i][j] = pij/pj
                 co_presence[i][j] = pij**2/(min(pi, pj)*np.mean([pi, pj]))
@@ -175,12 +184,12 @@ def topic_rk(has_topic, year):
             theta_left.append(theta)
         else:
             theta_right.append(theta)
-    theta = theta_left + theta_right
+    theta = np.asarray(theta_left + theta_right)
     theta_left = np.asarray(theta_left)
     theta_left = theta_left.sum(axis=0)
     theta_right = np.asarray(theta_right)
     theta_right = theta_right.sum(axis=0)
-    rk = theta_left/theta_right
+    rk = theta_right/theta_left
     return rk, theta
 
 
@@ -192,24 +201,14 @@ def topic_analysis(data, type_str, n_topics):
         os.mkdir('./results/topics/{}/{} topics'.format(type_str, n_topics))
     Dir = './results/topics/{}/{} topics/'.format(type_str, n_topics)
 
-    data = data[data['year'].isin(range(start_year, end_year))].copy()
-    text = get_docs(data, title=True, keywords=True, fos=False)
+    text = list(data['text'])
     year = data['year']
 
-    # if type_str=='journal':
-    #     n_topics = jrnl_n_topics
-    # else:
-    #     n_topics = conf_n_topics
-
+    dictionary, corpus = doc2bow(text)
     model_file_name = './cache/{} lda model {}'.format(type_str, n_topics)
-    if os.path.exists(model_file_name):
-        print(now(), 'loading {} lda model n_topics={}'.format(type_str, n_topics))
-        model = LdaModel.load(model_file_name)
-    else:
-        model = lda_model(text, num_topics=n_topics)
-        model.save(model_file_name)
+    model = lda_model(corpus, dictionary, n_topics, model_file_name)
 
-    topic_dis = get_topic_distribution(model, text)
+    topic_dis = get_topic_distribution(model, corpus)
     def find_topic(x):
         y = np.zeros(len(x))
         y[np.argmax(x)] = 1
@@ -221,10 +220,13 @@ def topic_analysis(data, type_str, n_topics):
     topics, prob = get_topics(model, n_topics)
     topics_df = pd.DataFrame(topics)
     topics_df = topics_df.iloc[hot_topic, :]
-    topics_df.to_csv(Dir+'topic terms.csv')
     prob_df = pd.DataFrame(prob)
     prob_df = prob_df.iloc[hot_topic, :]
-    prob_df.to_csv(Dir+'topic terms probability.csv')
+    if not os.path.exists(Dir+'hot topics'):
+        os.mkdir(Dir+'hot topics')
+    for i, ht in enumerate(hot_topic):
+        topic_prob = pd.Series(prob[ht], index=topics[ht])
+        topic_prob.to_csv(Dir+'hot topics/{}-{}.csv'.format(i, ht))
 
     hot_topic_df = pd.DataFrame()
     hot_topic_df['topics'] = topics_df.apply(lambda x: ' '.join(x), axis=1)
@@ -232,12 +234,19 @@ def topic_analysis(data, type_str, n_topics):
     rk, theta = topic_rk(has_topic[hot_topic], year)
     hot_topic_df['rk'] = rk
     hot_topic_df.to_csv(Dir+'hot topics.csv')
+    theta_df = pd.DataFrame(theta, 
+                            index=range(start_year, end_year), 
+                            columns=hot_topic)
+    theta_df.to_csv(Dir+'theta.csv')
 
-    co_presence, connection = co_occurrence_matrix(has_topic, len(text), n_topics)
+    co_presence, connection = co_occurrence_matrix(has_topic[hot_topic], 
+                                                   len(text), 
+                                                   hot_topic_num_all)
     # connection = pd.DataFrame(connection)
     # connection.to_csv(Dir+'connection.csv')
-    co_presence = pd.DataFrame(co_presence)
-    co_presence = co_presence.iloc[hot_topic, hot_topic]
+    co_presence = pd.DataFrame(co_presence,
+                               index=hot_topic,
+                               columns=hot_topic)
     co_presence.to_csv(Dir+'co-presence.csv')
 
     topic_of_the_year, key_papers_num, key_papers_proportion = hot_topics_every_year(has_topic, year)
@@ -249,16 +258,19 @@ def topic_analysis(data, type_str, n_topics):
     }, index=range(start_year, end_year))
     key_papers.to_csv(Dir+'key papers.csv')
 
-    # turnaround_year(topic_dis, year, type_str, Dir)
+    turnaround_year(topic_dis, year, type_str, Dir)
 
 
 if __name__=='__main__':
     if not os.path.exists('./results/topics'):
         os.mkdir('./results/topics')
 
-    for n_topics in n_topic_list:
-        jrnl_papers = pd.read_json('./cache/journal_paper_complete.txt')
-        conf_papers = pd.read_json('./cache/conference_paper_complete.txt')
+    jrnl_papers = pd.read_json('./cache/journal_papers.txt')
+    jrnl_papers = get_docs(jrnl_papers, title=True, keywords=False)
 
+    conf_papers = pd.read_json('./cache/conference_papers.txt')
+    conf_papers = get_docs(conf_papers, title=True, keywords=False)
+
+    for n_topics in n_topic_list:
         topic_analysis(jrnl_papers, 'journal', n_topics)
         topic_analysis(conf_papers, 'conference', n_topics)

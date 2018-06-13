@@ -204,8 +204,8 @@ def basic_info(data, type_str):
     data = data.groupby(['real_venue'], as_index=False, sort=True).sum()
     data = data.merge(year_df, on='real_venue')
 
-    data['paper_per_author'] = data['papers_num']/data['authors_num']
-    data['author_per_paper'] = data['uniq_authors']/data['papers_num']
+    data['paper_per_author'] = data['papers_num']/data['uniq_authors']
+    data['author_per_paper'] = data['authors_num']/data['papers_num']
     data['citation_per_paper'] = data['citations']/data['papers_num']
     data = data.drop(['year'], axis=1)
     data.to_csv('./results/{} basic info.csv'.format(type_str))
@@ -240,8 +240,8 @@ def annual_summary(data, year_citation, paper_citation_every_year, type_str):
 
     data = data.merge(year_citation, left_on='year', right_index=True)
 
-    data['paper_per_author'] = data['papers_num']/data['authors_num']
-    data['author_per_paper'] = data['uniq_authors']/data['papers_num']
+    data['paper_per_author'] = data['papers_num']/data['uniq_authors']
+    data['author_per_paper'] = data['authors_num']/data['papers_num']
     data['reference_per_paper'] = data['reference_num']/data['papers_num']
     data['author_self_citation_rate'] = data['author_self_citations']/data['citations']
     data['venue_self_citation_rate'] = data['venue_self_citations']/data['citations']

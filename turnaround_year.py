@@ -15,37 +15,11 @@ from sklearn.model_selection import (GridSearchCV, KFold,
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC, LinearSVC
 
+from plotter import plot_confusion_matrix, plot_innovation_score
+
 
 def now():
     return time.strftime("%m-%d %H:%M", time.localtime())
-
-
-def plot_confusion_matrix(cm, labels, Dir):
-    n = len(labels)
-    fig, ax = plt.subplots()
-    fig.set_size_inches(10, 8)
-    im = ax.imshow(cm)
-
-    plt.xlabel('y_pred')
-    plt.ylabel('y_true')
-    ax.set_xticks(np.arange(n))
-    ax.set_yticks(np.arange(n))
-    ax.set_xticklabels(labels)
-    ax.set_yticklabels(labels)
-    # ax.tick_params(top=True, bottom=False,
-    #                labeltop=True, labelbottom=False)
-    plt.setp(ax.get_xticklabels(), rotation=90, ha="right",
-            rotation_mode="anchor")
-    # for i in range(n):
-    #     for j in range(n):
-    #         if cm[i][j]==0:
-    #             continue
-    #         text = ax.text(j, i, cm[i, j],
-    #                     ha="center", va="center", color="w")
-    cbar = ax.figure.colorbar(im, ax=ax)
-    plt.tight_layout()
-    plt.savefig(Dir+'confusion matrix.pdf', format='pdf')
-    # plt.show()
 
 
 def innovation_score(y_true, y_pred):
@@ -69,16 +43,6 @@ def innovation_score(y_true, y_pred):
 
         score.append(errf/py*NF - errp/py*NP)
     return score, year
-
-
-def plot_innovation_score(score, year):
-    fig, ax = plt.subplots()
-    ax.set_xticks(year)
-    ax.set_xticklabels(year)
-    plt.bar(year, score)
-    plt.xlabel('Year')
-    plt.ylabel('Innovation Score')
-    plt.show()
 
 
 def turnaround_year(topic_dis, year, type_str, Dir):

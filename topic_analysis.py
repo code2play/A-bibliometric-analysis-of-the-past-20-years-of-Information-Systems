@@ -13,10 +13,11 @@ from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 from nltk.tokenize import RegexpTokenizer
 
+from plotter import plot_corr_matrix, plot_word_cloud
 from turnaround_year import turnaround_year
 
 start_year, end_year = 1996, 2016
-n_topic_list = [100, 300, 500, 1000]
+n_topic_list = [50, 100, 300, 500, 1000]
 threshold = 0.2
 hot_topic_num_year = 5
 hot_topic_num_all = 50
@@ -26,7 +27,10 @@ def now():
     return time.strftime("%m-%d %H:%M", time.localtime())
 
 
-def get_docs(data, title=True, keywords=False, fos=False):
+def get_docs(data, title=True, keywords=False):
+    kws = [j for i,v in data['keywords'].iteritems() if v!=None for j in v]
+    kws = pd.unique(kws)
+
     def pad_space(x):
         if pd.isna(x):
             return ' '
@@ -34,19 +38,17 @@ def get_docs(data, title=True, keywords=False, fos=False):
     def concat(x):
         if x==None:
             return ' '
+        # x = [i for i in x if langid.classify(i)[0]=='en']
         return ' ' + ' '.join(x) + ' '
     data['title'] = data['title'].apply(pad_space)
     data['abstract'] = data['abstract'].apply(pad_space)
     data['keywords'] = data['keywords'].apply(concat)
-    data['fos'] = data['fos'].apply(concat)
 
     data['text'] = data['abstract']
     if title:
         data['text'] += data['title']
     if keywords:
         data['text'] += data['keywords']
-    if fos:
-        data['text'] += data['fos']
     data['text'] = data['text'].apply(str.lower)
 
     def is_en(x):
@@ -55,25 +57,81 @@ def get_docs(data, title=True, keywords=False, fos=False):
         return langid.classify(x)[0]=='en'
     cond = data['year'].isin(range(start_year, end_year)) & \
            data['text'].apply(is_en)
-    return data[cond][['text', 'year']]
+    
+    return data[cond][['text', 'year']], kws
+
+# 效果不好，匹配的单词出现频率太低
+def match_keywords(tokens, kw_list):
+    wnl = WordNetLemmatizer()
+    prefix = []
+    keywords = []
+    for k in kw_list:
+        kws = k.split(' ')
+        temp = []
+        for i in range(0,len(kws)):
+            word = wnl.lemmatize(kws[i], pos='n')
+            temp.append(word)
+            if i>0:
+                prefix.append(' '.join(temp[:i]))
+        keywords.append(' '.join(temp))
+    prefix = dict.fromkeys(prefix)
+    keywords = dict.fromkeys(keywords)
+
+    matched_tokes = []
+    cnt = 0
+    for t in tokens:
+        temp = []
+        i = 0
+        while(i<len(t)):
+            def dfs(b, e):
+                s = ' '.join(t[b:e])
+                if s not in prefix or e==len(t):
+                    if s in keywords:
+                        return e
+                    else:
+                        return -1
+                x = dfs(b, e+1)
+                if x>0:
+                    return x
+                elif s in keywords:
+                    return e
+                return -1
+            j = dfs(i, i+1)
+            if j>0:
+                temp.append(' '.join(t[i:j]))
+                cnt += 1
+                i = j
+            else:
+                temp.append(t[i])
+                i += 1
+        matched_tokes.append(temp)
+    print(now(), 'matched {} keywords'.format(cnt))
+    return matched_tokes
 
 
-def doc2bow(data):
+def doc2bow(text, keywords, match=False):
     # Tokenize
     tokenizer = RegexpTokenizer('[a-z][a-z]+')
-    tokens = [tokenizer.tokenize(text) for text in data]
-
-    # Exclud stop words
-    # nltk.download('stopwords')
-    # en_stop = stopwords.words('english')
-    en_stop = json.load(open('./cache/en.json', 'r'))
-    tokens = [[j for j in i if j not in en_stop] for i in tokens]
+    tokens = [tokenizer.tokenize(t) for t in text]
 
     # Stemming
     # nltk.download('wordnet')
     wnl = WordNetLemmatizer()
     tokens = [[wnl.lemmatize(j, pos='n') for j in i]for i in tokens]
+    if match:
+        match_keywords(tokens, keywords)
     tokens = [[wnl.lemmatize(j, pos='v') for j in i]for i in tokens]
+
+    # Exclud stop words
+    # nltk.download('stopwords')
+    # en_stop = stopwords.words('english')
+    en_stop = json.load(open('./cache/en.json', 'r'))
+    en_stop = dict.fromkeys(en_stop)
+    tokens = [[j for j in i if j not in en_stop] for i in tokens]
+
+    es_stop = json.load(open('./cache/es.json', 'r', encoding='UTF-8'))
+    es_stop = dict.fromkeys(es_stop)
+    tokens = [[j for j in i if j not in es_stop] for i in tokens]
 
     # Doc2bow
     dictionary = corpora.Dictionary(tokens)
@@ -193,7 +251,7 @@ def topic_rk(has_topic, year):
     return rk, theta
 
 
-def topic_analysis(data, type_str, n_topics):
+def topic_analysis(data, keywords, type_str, n_topics):
     print(now(), 'analysing {} topics'.format(type_str))
     if not os.path.exists('./results/topics/{}'.format(type_str)):
         os.mkdir('./results/topics/{}'.format(type_str))
@@ -204,7 +262,7 @@ def topic_analysis(data, type_str, n_topics):
     text = list(data['text'])
     year = data['year']
 
-    dictionary, corpus = doc2bow(text)
+    dictionary, corpus = doc2bow(text, keywords, match=False)
     model_file_name = './cache/{} lda model {}'.format(type_str, n_topics)
     model = lda_model(corpus, dictionary, n_topics, model_file_name)
 
@@ -220,13 +278,11 @@ def topic_analysis(data, type_str, n_topics):
     topics, prob = get_topics(model, n_topics)
     topics_df = pd.DataFrame(topics)
     topics_df = topics_df.iloc[hot_topic, :]
+    topics_df.to_csv(Dir+'topic terms.csv')
     prob_df = pd.DataFrame(prob)
     prob_df = prob_df.iloc[hot_topic, :]
-    if not os.path.exists(Dir+'hot topics'):
-        os.mkdir(Dir+'hot topics')
-    for i, ht in enumerate(hot_topic):
-        topic_prob = pd.Series(prob[ht], index=topics[ht])
-        topic_prob.to_csv(Dir+'hot topics/{}-{}.csv'.format(i, ht))
+    prob_df.to_csv(Dir+'topic terms probability.csv')
+    plot_word_cloud(topics_df, prob_df, Dir)
 
     hot_topic_df = pd.DataFrame()
     hot_topic_df['topics'] = topics_df.apply(lambda x: ' '.join(x), axis=1)
@@ -248,6 +304,7 @@ def topic_analysis(data, type_str, n_topics):
                                index=hot_topic,
                                columns=hot_topic)
     co_presence.to_csv(Dir+'co-presence.csv')
+    plot_corr_matrix(co_presence, Dir)
 
     topic_of_the_year, key_papers_num, key_papers_proportion = hot_topics_every_year(has_topic, year)
     key_papers = pd.DataFrame({
@@ -266,11 +323,11 @@ if __name__=='__main__':
         os.mkdir('./results/topics')
 
     jrnl_papers = pd.read_json('./cache/journal_papers.txt')
-    jrnl_papers = get_docs(jrnl_papers, title=True, keywords=False)
+    jrnl_papers, jrnl_kws = get_docs(jrnl_papers, title=True, keywords=False)
 
     conf_papers = pd.read_json('./cache/conference_papers.txt')
-    conf_papers = get_docs(conf_papers, title=True, keywords=False)
+    conf_papers, conf_kws = get_docs(conf_papers, title=True, keywords=False)
 
     for n_topics in n_topic_list:
-        topic_analysis(jrnl_papers, 'journal', n_topics)
-        topic_analysis(conf_papers, 'conference', n_topics)
+        topic_analysis(jrnl_papers, jrnl_kws, 'journal', n_topics)
+        topic_analysis(conf_papers, conf_kws, 'conference', n_topics)
